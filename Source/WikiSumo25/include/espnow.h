@@ -29,6 +29,12 @@ typedef struct remote_data_t {
 } remote_data_t;
 remote_data_t remote_data;
 
+typedef struct led_struct_t {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} led_struct_t;
+
 typedef struct robot_data_t {
     uint8_t status;
     uint8_t start;
@@ -36,6 +42,9 @@ typedef struct robot_data_t {
     uint8_t vl53l0x_error = 0;
     uint8_t qre1113_error = 0;
     uint8_t qre1113_calibrate = 0;
+    led_struct_t led_0;
+    led_struct_t led_1;
+    led_struct_t led_2;
 } robot_data_t;
 robot_data_t robot_data;
 

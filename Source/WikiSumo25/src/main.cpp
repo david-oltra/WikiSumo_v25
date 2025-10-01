@@ -1,11 +1,11 @@
 /**
  *  TODO
  *  [✔] WS2812
- *  [✔] TB6612
+ *  [✔] TB6612 -> Updated to DRV8871
  *  [✔] VL53L0X
  *  [✔] QRE1113
- *  [ ] ESPNOW
- *  [*] STRATEGIES
+ *  [✔] ESPNOW
+ *  [✔] STRATEGIES
  */
 
 #include <freertos/FreeRTOS.h>
@@ -32,13 +32,14 @@
 #define CHANNEL_QRE_R ADC1_CHANNEL_2
 
 #define timeToStart 5000 // [ms]
-#define tofRangeDetect 100 // [mm]
+#define tofRangeDetect 300 // [mm]
 #define timeMove 1000 // [ms]
 #define strategyTime 500 // [ms]
 #define brightness 10 // 0-255
 
 uint8_t vl53l0xError = 0;
 uint8_t qre1113Error = 0;
+uint8_t qre1113Line = 0;
 
 extern "C" void app_main();
 
@@ -92,6 +93,45 @@ void buttonsInit()
     ESP_LOGW(TAG,"BUTTONS INIT OK");
 }
 
+void ledSet(uint8_t num, uint8_t r, uint8_t g, uint8_t b)
+{
+    led.setPixel(num,r,g,b);
+    switch (num)
+    {
+        case 0:
+            robot_data.led_0.r=r;
+            robot_data.led_0.g=g;
+            robot_data.led_0.b=b;
+            break;
+        case 1:
+            robot_data.led_1.r=r;
+            robot_data.led_1.g=g;
+            robot_data.led_1.b=b;
+            break;
+        case 2:
+            robot_data.led_2.r=r;
+            robot_data.led_2.g=g;
+            robot_data.led_2.b=b;
+            break;
+        default:
+            break;
+    }
+}
+
+void ledClear()
+{
+    led.clear();
+    robot_data.led_0.r=0;
+    robot_data.led_0.g=0;
+    robot_data.led_0.b=0;
+    robot_data.led_1.r=0;
+    robot_data.led_1.g=0;
+    robot_data.led_1.b=0;
+    robot_data.led_2.r=0;
+    robot_data.led_2.g=0;
+    robot_data.led_2.b=0;
+}
+
 void ws2812Init()
 {
     ESP_LOGW(TAG,"WS2812 INIT");
@@ -103,16 +143,16 @@ void ws2812Init()
     led.init(ws2812_config);
 
     vTaskDelay(pdMS_TO_TICKS(200));
-    led.clear();
-    led.setPixel(0,0,0,brightness);
-    led.setPixel(1,0,brightness,0);
-    led.setPixel(2,brightness,0,0);
+    ledClear();
+    ledSet(0,0,0,brightness);
+    ledSet(1,0,brightness,0);
+    ledSet(2,brightness,0,0);
     led.show();
     vTaskDelay(pdMS_TO_TICKS(1000));
-    led.clear();
-    led.setPixel(0,0,0,0);
-    led.setPixel(1,0,0,0);
-    led.setPixel(2,0,0,0);
+    ledClear();
+    ledSet(0,0,0,0);
+    ledSet(1,0,0,0);
+    ledSet(2,0,0,0);
     led.show();
 
     ESP_LOGW(TAG,"WS2812 INIT OK");
@@ -158,22 +198,22 @@ void vl53l0xInit()
     if (!tofL.init()) { 
         ESP_LOGE(TAG, "Failed to initialize VL53L0X L :("); 
         robot_data.vl53l0x_error = 1;
-        led.clear();
-        led.setPixel(2, brightness, 0, 0);
+        ledClear();
+        ledSet(2, brightness, 0, 0);
         led.show();
     }
     if(tofL.setDeviceAddress(0x31))
     {
-        led.clear();
-        led.setPixel(2, 0, brightness, 0);
+        ledClear();
+        ledSet(2, 0, brightness, 0);
         led.show();
     }
     else
     {
         ESP_LOGE(TAG, "Failed to initialize VL53L0X L :("); 
         robot_data.vl53l0x_error = 1;
-        led.clear();
-        led.setPixel(2, brightness, 0, 0);
+        ledClear();
+        ledSet(2, brightness, 0, 0);
         led.show();
     }
     tofC.reset();
@@ -182,32 +222,32 @@ void vl53l0xInit()
     if (!tofC.init()) { 
         ESP_LOGE(TAG, "Failed to initialize VL53L0X C :("); 
         robot_data.vl53l0x_error = 1;
-        led.clear();
-        led.setPixel(1, brightness, 0, 0);
+        ledClear();
+        ledSet(1, brightness, 0, 0);
         led.show();
     }
     if (tofC.setDeviceAddress(0x30))
     {
-        led.setPixel(1, 0, brightness, 0);
+        ledSet(1, 0, brightness, 0);
         led.show();
     }
     else
     {
         ESP_LOGE(TAG, "Failed to initialize VL53L0X C :("); 
         robot_data.vl53l0x_error = 1;
-        led.clear();
-        led.setPixel(1, brightness, 0, 0);
+        ledClear();
+        ledSet(1, brightness, 0, 0);
         led.show();
     }
     tofR.reset();
     if (!tofR.init()) { 
         ESP_LOGE(TAG, "Failed to initialize VL53L0X R :("); 
         robot_data.vl53l0x_error = 1;
-        led.clear();
-        led.setPixel(0, brightness, 0, 0);
+        ledClear();
+        ledSet(0, brightness, 0, 0);
         led.show();
     }
-    led.setPixel(0, 0, brightness, 0);
+    ledSet(0, 0, brightness, 0);
     led.show();
     
     if(!robot_data.vl53l0x_error)
@@ -228,43 +268,43 @@ void vl53l0xTask( void * pvParameters )
             if(dir!=TB6612::FWD){vTaskDelay(pdMS_TO_TICKS(100));};
             dir = TB6612::FWD;
             motors.setDirection(TB6612::FWD);
-            led.clear();
-            led.setPixel(1,0,brightness,0);
+            ledClear();
+            ledSet(1,0,brightness,0);
             led.show();
         }
-        // ESP_LOGI("TOFC","%u",result_mm);
         else
         {
-            tofL.read(&result_mm);
-            if (result_mm < tofRangeDetect)
+            if (qre1113Line == 0)
             {
-                if(dir!=TB6612::LEFT){vTaskDelay(pdMS_TO_TICKS(100));};
-                dir = TB6612::LEFT;
-                motors.setDirection(TB6612::LEFT);
-                led.clear();
-                led.setPixel(2,0,brightness,0);
-                led.show();
+                tofL.read(&result_mm);
+                if (result_mm < tofRangeDetect)
+                {
+                    if(dir!=TB6612::LEFT){vTaskDelay(pdMS_TO_TICKS(100));};
+                    dir = TB6612::LEFT;
+                    motors.setDirection(TB6612::LEFT);
+                    ledClear();
+                    ledSet(2,0,brightness,0);
+                    led.show();
+                }
+                tofR.read(&result_mm);
+                if (result_mm < tofRangeDetect)
+                {
+                    if(dir!=TB6612::RIGHT){vTaskDelay(pdMS_TO_TICKS(100));};
+                    dir = TB6612::RIGHT;
+                    motors.setDirection(TB6612::RIGHT);
+                    ledClear();
+                    ledSet(0,0,brightness,0);
+                    led.show();
+                }
             }
-            // ESP_LOGI("TOFL","%u",result_mm);
-            tofR.read(&result_mm);
-            if (result_mm < tofRangeDetect)
-            {
-                if(dir!=TB6612::RIGHT){vTaskDelay(pdMS_TO_TICKS(100));};
-                dir = TB6612::RIGHT;
-                motors.setDirection(TB6612::RIGHT);
-                led.clear();
-                led.setPixel(0,0,brightness,0);
-                led.show();
-            }
-            // ESP_LOGI("TOFR","%u",result_mm);
         }
 
         if (adc1_get_raw(ADC1_CHANNEL_0)>2000 || remote_data.start)
         {
-            led.clear();
-            led.setPixel(0,0,0,0);
-            led.setPixel(1,0,0,0);
-            led.setPixel(2,0,0,0);
+            ledClear();
+            ledSet(0,0,0,0);
+            ledSet(1,0,0,0);
+            ledSet(2,0,0,0);
             led.show();
             motors.setDirection(TB6612::STOP);
             esp_restart();
@@ -286,10 +326,8 @@ uint8_t qre1113Calibrate(qreParameterToPass_t &qreParameterToPass)
     {
         qreSensorL = adc1_get_raw(CHANNEL_QRE_L);
         qreSensorR= adc1_get_raw(CHANNEL_QRE_R);
-        // ESP_LOGI("QRE1113","%u\t%u",qreSensorL,qreSensorR);
         if (qreSensorL < qreParameterToPass.qreSensorLRef){qreParameterToPass.qreSensorLRef = qreSensorL;}
         if (qreSensorR < qreParameterToPass.qreSensorRRef){qreParameterToPass.qreSensorRRef = qreSensorR;}
-        // vTaskDelay(pdMS_TO_TICKS(100));
     }
     qreParameterToPass.qreSensorLRef -= 100;
     qreParameterToPass.qreSensorRRef -= 100;
@@ -299,18 +337,18 @@ uint8_t qre1113Calibrate(qreParameterToPass_t &qreParameterToPass)
     if((qreParameterToPass.qreSensorLRef < 200) || (qreParameterToPass.qreSensorRRef < 200))
     {
         robot_data.qre1113_error = 1;
-        led.clear();
-        led.setPixel(0, brightness, 0, 0);
-        led.setPixel(2, brightness, 0, 0);
+        ledClear();
+        ledSet(0, brightness, 0, 0);
+        ledSet(2, brightness, 0, 0);
         led.show();
         ESP_LOGE(TAG,"QRE1113 CALIBRATE FAIL");
     }
     else
     {
         robot_data.qre1113_error = 0;
-        led.clear();
-        led.setPixel(0, 0, 0, brightness);
-        led.setPixel(2, 0, 0, brightness);
+        ledClear();
+        ledSet(0, 0, 0, brightness);
+        ledSet(2, 0, 0, brightness);
         led.show();
         ESP_LOGW(TAG,"QRE1113 CALIBRATE OK");
     }
@@ -341,20 +379,18 @@ void qre1113Init(qreParameterToPass_t &qreParameterToPass)
 
 void qre1113Task( void * pvParameters )
 {
-    qreParameterToPass_t *params = (qreParameterToPass_t *)pvParameters;
-
     uint8_t dir = TB6612::STOP;
-    uint64_t refTime = esp_timer_get_time(); 
+    uint64_t refTime = esp_timer_get_time();
 
     for(;;)
     {
-        if (robot_data.qre1113_error)
+        if (remote_data.disable_qre1113_error)
         {
-            if ((esp_timer_get_time() - refTime) > 5000000)
+            if ((esp_timer_get_time() - refTime) > 3000000)
             {
                 motors.setDirection(TB6612::LEFT);
-                led.clear();
-                led.setPixel(2,brightness,0,0);
+                ledClear();
+                ledSet(2,brightness,0,0);
                 led.show();
                 refTime = esp_timer_get_time(); 
             }
@@ -364,41 +400,35 @@ void qre1113Task( void * pvParameters )
             uint16_t qreSensorL = adc1_get_raw(CHANNEL_QRE_L);
             uint16_t qreSensorR = adc1_get_raw(CHANNEL_QRE_R);
             
-            // ESP_LOGI("QRE", "%u - %u", qreSensorL, qreSensorR);
-            if (qreSensorL <= params->qreSensorLRef)
+            if (qreSensorL <= qreParameterToPass.qreSensorLRef)
             {
+                qre1113Line = 1;
                 if(dir!=TB6612::RIGHT){vTaskDelay(pdMS_TO_TICKS(100));};
                 dir = TB6612::RIGHT;
                 motors.setDirection(TB6612::RIGHT);
-                led.clear();
-                led.setPixel(2,0,0,brightness);
+                ledClear();
+                ledSet(2,0,0,brightness);
                 led.show();
                 vTaskDelay(pdMS_TO_TICKS(timeMove));
                 motors.setDirection(TB6612::FWD);
+                qre1113Line = 0;
             }
-            else if (qreSensorR <= params->qreSensorRRef)
+            else if (qreSensorR <= qreParameterToPass.qreSensorRRef)
             {
+                qre1113Line = 1;
                 if(dir!=TB6612::LEFT){vTaskDelay(pdMS_TO_TICKS(100));};
                 dir = TB6612::LEFT;
                 motors.setDirection(TB6612::LEFT);
-                led.clear();
-                led.setPixel(0,0,0,brightness);
+                ledClear();
+                ledSet(0,0,0,brightness);
                 led.show();
                 vTaskDelay(pdMS_TO_TICKS(timeMove));
                 motors.setDirection(TB6612::FWD);
+                qre1113Line = 0;
             }
         }
 
-        if (adc1_get_raw(ADC1_CHANNEL_0)>2000 || remote_data.start)
-        {
-            led.clear();
-            led.setPixel(0,0,0,0);
-            led.setPixel(1,0,0,0);
-            led.setPixel(2,0,0,0);
-            led.show();
-            motors.setDirection(TB6612::STOP);
-            esp_restart();
-        }
+        esp_now_send_data(peer_mac, (uint8_t *) &robot_data, sizeof(robot_data));
     };
 }
 
@@ -408,10 +438,10 @@ void stopTask(void * pvParameter )
     {
         if (adc1_get_raw(ADC1_CHANNEL_0)>2000 || remote_data.start)
         {
-            led.clear();
-            led.setPixel(0,0,0,0);
-            led.setPixel(1,0,0,0);
-            led.setPixel(2,0,0,0);
+            ledClear();
+            ledSet(0,0,0,0);
+            ledSet(1,0,0,0);
+            ledSet(2,0,0,0);
             led.show();
             motors.setDirection(TB6612::STOP);
             esp_restart();
@@ -447,25 +477,34 @@ void strategies(uint8_t strategy, uint8_t waitStart)
         case 0:
             if(!waitStart)
             {
-                led.clear();
-                led.setPixel(0,0,brightness,0);
-                led.setPixel(1,0,brightness,0);
+                ledClear();
+                ledSet(0,0,brightness,0);
+                ledSet(1,0,brightness,0);
                 led.show();
             }
             else
             {
-                motors.setDirection(TB6612::RIGHT);
-                vTaskDelay(pdMS_TO_TICKS(strategyTime));
-                motors.setDirection(TB6612::BACK);
-                vTaskDelay(pdMS_TO_TICKS(strategyTime));
-                motors.setDirection(TB6612::STOP);
+                uint16_t result_mm = 0;
+                tofC.read(&result_mm);
+                if (result_mm < tofRangeDetect)
+                {
+                    motors.setDirection(TB6612::FWD);
+                }
+                else
+                {
+                    motors.setDirection(TB6612::RIGHT);
+                    vTaskDelay(pdMS_TO_TICKS(strategyTime));
+                    motors.setDirection(TB6612::BACK);
+                    vTaskDelay(pdMS_TO_TICKS(strategyTime));
+                    motors.setDirection(TB6612::STOP);
+                }
             }
             break;
         case 1:
             if(!waitStart)
             {
-                led.clear();
-                led.setPixel(2,0,brightness,0);
+                ledClear();
+                ledSet(2,0,brightness,0);
                 led.show();
             }
             else
@@ -480,8 +519,8 @@ void strategies(uint8_t strategy, uint8_t waitStart)
         case 2:
             if(!waitStart)
             {
-                led.clear();
-                led.setPixel(1,brightness,0,0);
+                ledClear();
+                ledSet(1,brightness,0,0);
                 led.show();
             }
             else
@@ -496,8 +535,8 @@ void strategies(uint8_t strategy, uint8_t waitStart)
         case 3:
             if(!waitStart)
             {
-                led.clear();
-                led.setPixel(2,brightness,0,0);
+                ledClear();
+                ledSet(2,brightness,0,0);
                 led.show();
             }
             else
@@ -509,8 +548,8 @@ void strategies(uint8_t strategy, uint8_t waitStart)
         case 4:
             if(!waitStart)
             {
-                led.clear();
-                led.setPixel(0,brightness,0,0);
+                ledClear();
+                ledSet(0,brightness,0,0);
                 led.show();
             }
             else
@@ -547,31 +586,6 @@ void app_main()
     else if(robot_data.qre1113_error){strategy = 3;}
     while(!waitStart)
     {
-        // refTime = esp_timer_get_time();
-        // while(remote_data.swicth_1) { }
-        // if (esp_timer_get_time()-refTime >= 3000000)
-        // {
-        //     while(remote_data.swicth_1)
-        //     {
-        //         led.clear();
-        //         led.setPixel(0,0,brightness,0);
-        //         led.setPixel(1,0,brightness,0);
-        //         led.setPixel(2,0,brightness,0);
-        //         led.show();
-        //     }
-        //     waitStart = 1;
-        //     break;
-        // }
-        // else if ((esp_timer_get_time()-refTime > 500000) && (esp_timer_get_time()-refTime < 3000000))
-        // {
-        //     strategy++;
-        //     if (strategy>4)
-        //     {
-        //         strategy = 0;
-        //     }
-        //     strategies(strategy, waitStart);
-        // }
-
         buttonsStatus = adc1_get_raw(ADC1_CHANNEL_0);
         if (buttonsStatus > 2000)
         {
@@ -599,12 +613,12 @@ void app_main()
                         strategy = 2;
                         for (uint8_t i=0;i<2;i++)
                         {
-                            led.clear();
-                            led.setPixel(0, 0, 0, 0);
+                            ledClear();
+                            ledSet(0, 0, 0, 0);
                             led.show();
                             vTaskDelay(pdMS_TO_TICKS(500));
-                            led.clear();
-                            led.setPixel(1, brightness, 0, 0);
+                            ledClear();
+                            ledSet(1, brightness, 0, 0);
                             led.show();
                             vTaskDelay(pdMS_TO_TICKS(500));
                         }
@@ -620,18 +634,18 @@ void app_main()
                         }
                         for (uint8_t i=0;i<2;i++)
                         {
-                            led.clear();
-                            led.setPixel(0, 0, 0, 0);
+                            ledClear();
+                            ledSet(0, 0, 0, 0);
                             led.show();
                             vTaskDelay(pdMS_TO_TICKS(200));
-                            led.clear();
+                            ledClear();
                             if (strategy == 3)
                             {
-                                led.setPixel(2, brightness, 0, 0);
+                                ledSet(2, brightness, 0, 0);
                             }
                             else
                             {
-                                led.setPixel(0, brightness, 0, 0);
+                                ledSet(0, brightness, 0, 0);
                             }
                             led.show();
                             vTaskDelay(pdMS_TO_TICKS(200));
@@ -646,16 +660,15 @@ void app_main()
                 while (adc1_get_raw(ADC1_CHANNEL_0)>2000)
                 {
                     //Boton 1v65 pulsado
-                    led.clear();
-                    led.setPixel(0,0,brightness,0);
-                    led.setPixel(1,0,brightness,0);
-                    led.setPixel(2,0,brightness,0);
+                    ledClear();
+                    ledSet(0,0,brightness,0);
+                    ledSet(1,0,brightness,0);
+                    ledSet(2,0,brightness,0);
                     led.show();
                 }
                 waitStart = 1;
                 break;
             }
-            // ESP_LOGI("STRATEGY","%u %llu",strategy, buttonsStatus);
         }
 
         robot_data.strategy = strategy;
@@ -673,52 +686,60 @@ void app_main()
             robot_data.qre1113_calibrate = qre1113Calibrate(qreParameterToPass);
         }
         
-        // ESP_LOGE("STRATEGY","%u\t%u",strategy, robot_data.strategy);
         strategies(strategy, waitStart);
     };
 
     // blink leds (timeToStart) ms.
     for (uint8_t i=0; i<10; i++)
     {
-        led.clear();
+        ledClear();
         if (robot_data.vl53l0x_error || robot_data.qre1113_error)
         {
-            led.setPixel(0,brightness,0,0);
-            led.setPixel(1,brightness,0,0);
-            led.setPixel(2,brightness,0,0);
+            ledSet(0,brightness,0,0);
+            ledSet(1,brightness,0,0);
+            ledSet(2,brightness,0,0);
         }
         else
         {
-            led.setPixel(0,0,brightness,0);
-            led.setPixel(1,0,brightness,0);
-            led.setPixel(2,0,brightness,0);
+            ledSet(0,0,brightness,0);
+            ledSet(1,0,brightness,0);
+            ledSet(2,0,brightness,0);
         }
         led.show();
         vTaskDelay(pdMS_TO_TICKS(timeToStart/20));
-        led.clear();
-        led.setPixel(0,0,0,0);
-        led.setPixel(1,0,0,0);
-        led.setPixel(2,0,0,0);
+        ledClear();
+        ledSet(0,0,0,0);
+        ledSet(1,0,0,0);
+        ledSet(2,0,0,0);
         led.show();
         vTaskDelay(pdMS_TO_TICKS(timeToStart/20));
     }
 
+    static uint8_t ucParameterToPass;
+
+
     strategies(strategy, waitStart);
 
-    static uint8_t ucParameterToPass;
     if (!robot_data.vl53l0x_error)
     {
         TaskHandle_t vl53l0xTaskHandle = NULL;
-        xTaskCreate( vl53l0xTask, "vl53l0xTask", 1024*2, &ucParameterToPass, 24, &vl53l0xTaskHandle ); 
+        xTaskCreate( vl53l0xTask, "vl53l0xTask", 1024, &ucParameterToPass, 24, &vl53l0xTaskHandle ); 
     }
-    if (!robot_data.qre1113_error)
+    else
+    {
+        TaskHandle_t stopTaskHandle = NULL;
+        xTaskCreate( stopTask, "stopTask", 1024, &ucParameterToPass, 10, &stopTaskHandle );
+    }
+
+    if (!robot_data.qre1113_error || remote_data.disable_qre1113_error)
     {
         TaskHandle_t qre1113TaskHandle = NULL;
-        xTaskCreate( qre1113Task, "qre1113Task", 1024*2, &qreParameterToPass, 23, &qre1113TaskHandle ); 
+        xTaskCreate( qre1113Task, "qre1113Task", 1024, &qreParameterToPass, 23, &qre1113TaskHandle ); 
     }
-    TaskHandle_t stopTaskHandle = NULL;
-    xTaskCreate( stopTask, "stopTask", 1024*2, &ucParameterToPass, 10, &stopTaskHandle ); 
-    TaskHandle_t espnowTaskHandle = NULL;
-    xTaskCreate( espnowTask, "espnowTask", 1024*2, &ucParameterToPass, 9, &espnowTaskHandle ); 
+    else
+    { 
+        TaskHandle_t espnowTaskHandle = NULL;
+        xTaskCreate( espnowTask, "espnowTask", 1024, &ucParameterToPass, 9, &espnowTaskHandle ); 
+    }
 
 }
